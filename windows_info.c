@@ -14,6 +14,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode >= 0 && wParam == WM_KEYDOWN) {
         KBDLLHOOKSTRUCT* keyboard = (KBDLLHOOKSTRUCT*)lParam;
         keyPressed = keyboard->vkCode;
+
         BOOL success = WriteFile(microcontrollerPort, &keyPressed, 1, &bytesWritten, NULL);
 
         if (!success) {
@@ -50,7 +51,7 @@ int main() {
     }
 
     // Configuring serial communication settings
-    dcb.BaudRate = CBR_9600;
+    dcb.BaudRate = CBR_115200;
     dcb.ByteSize = 8;
     dcb.Parity = NOPARITY;
     dcb.StopBits = ONESTOPBIT;

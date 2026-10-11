@@ -31,7 +31,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define BASE_DELAY 3000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -47,7 +47,9 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-uint32_t delay = 500;
+uint32_t delay = BASE_DELAY;
+volatile uint16_t numCharsTyped = 0;
+uint8_t byteReceived;
 
 /* USER CODE END PV */
 
@@ -99,6 +101,12 @@ int main(void)
   MX_TIM2_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+
+  // Enable receiving data non-block mode
+  HAL_UART_Receive_IT(&huart2, &byteReceived, 1);
+
+  // Enable  timer interrupt mode
+  HAL_TIM_Base_Start_IT(&htim2);
 
   /* USER CODE END 2 */
 
@@ -209,9 +217,9 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 0;
+  htim2.Init.Prescaler = 1599;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4294967295;
+  htim2.Init.Period = 599999;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -311,6 +319,8 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+// Callback function for when user button is pressed
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == GPIO_PIN_13) {
 		if (delay == 1000) {
@@ -318,6 +328,34 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 		}
 		else {
 			delay += 250;
+		}
+	}
+}
+
+// Callback function for when letter key is pressed
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+	if (huart->Instance == USART2) {
+		if (byteReceived >= 65 && byteReceived <= 90) {
+			__disable_irq();
+			numCharsTyped++;
+			__enable_irq();
+		}
+	}
+	HAL_UART_Receive_IT(huart, &byteReceived, 1);
+}
+
+// Callback function for when timer period elapses
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if (htim->Instance == TIM2) {
+		__disable_irq();
+		uint16_t numCharsTypedCopy = numCharsTyped;
+		numCharsTyped = 0;
+		__enable_irq();
+		if (numCharsTypedCopy == 0) {
+			delay = BASE_DELAY;
+		}
+		else {
+			delay = (int)(BASE_DELAY / numCharsTypedCopy);
 		}
 	}
 }
