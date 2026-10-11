@@ -47,6 +47,7 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+uint32_t delay = 500;
 
 /* USER CODE END PV */
 
@@ -106,6 +107,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+	HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+	HAL_Delay(delay);
 
     /* USER CODE BEGIN 3 */
   }
@@ -308,6 +311,16 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+	if (GPIO_Pin == GPIO_PIN_13) {
+		if (delay == 1000) {
+			delay = 250;
+		}
+		else {
+			delay += 250;
+		}
+	}
+}
 
 /* USER CODE END 4 */
 
