@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -31,7 +30,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define BASE_DELAY 3000
+#define BASE_DELAY 1000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -49,6 +48,7 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 uint32_t delay = BASE_DELAY;
 volatile uint16_t numCharsTyped = 0;
+char charBuffer[20];
 uint8_t byteReceived;
 
 /* USER CODE END PV */
@@ -107,6 +107,17 @@ int main(void)
 
   // Enable  timer interrupt mode
   HAL_TIM_Base_Start_IT(&htim2);
+
+  ssd1306_Init();
+  ssd1306_SetCursor(0, 0);
+  ssd1306_WriteString("Typing Speed", Font_7x10, White);
+  ssd1306_UpdateScreen();
+//  HAL_Delay(3000);
+//  ssd1306_Fill(Black);
+//  ssd1306_UpdateScreen();
+
+
+
 
   /* USER CODE END 2 */
 
@@ -347,16 +358,29 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 // Callback function for when timer period elapses
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM2) {
+		// Erase the previous number
+		for (int y = 25; y < 25 + 12; y++) {
+		    for (int x = 25; x < 128; x++) {
+		        ssd1306_DrawPixel(x, y, Black);
+		    }
+		}
+		ssd1306_UpdateScreen();
+
+		ssd1306_UpdateScreen();
+
+		// Get new number of chars typed
 		__disable_irq();
 		uint16_t numCharsTypedCopy = numCharsTyped;
 		numCharsTyped = 0;
 		__enable_irq();
-		if (numCharsTypedCopy == 0) {
-			delay = BASE_DELAY;
-		}
-		else {
-			delay = (int)(BASE_DELAY / numCharsTypedCopy);
-		}
+
+		// Write the new number
+		ssd1306_SetCursor(25, 25);
+		snprintf(charBuffer, sizeof(charBuffer), "%d char/min", numCharsTypedCopy);
+		ssd1306_WriteString(charBuffer, Font_7x10, White);
+		ssd1306_UpdateScreen();
+
+
 	}
 }
 
