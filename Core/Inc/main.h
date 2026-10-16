@@ -34,6 +34,7 @@ extern "C" {
 #include <stdio.h>
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
+#include "display.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/

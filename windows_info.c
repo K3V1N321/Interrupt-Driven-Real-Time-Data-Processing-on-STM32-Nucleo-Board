@@ -9,9 +9,15 @@ HANDLE microcontrollerPort;
 uint8_t keyPressed;
 DWORD bytesWritten;
 
+/*
+* @brief Callback function to get and send keystrokes
+* @params nCode indicates whether or not this is a real keyboard event
+* @params wParam indicates what type of keyboard even occurrect
+* @params lParam pointer to struct with keyboard information
+*/
 // Callback function to get and send keystrokes
 LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    if (nCode >= 0 && wParam == WM_KEYDOWN) {
+    if (nCode == HC_ACTION && wParam == WM_KEYDOWN) {
         KBDLLHOOKSTRUCT* keyboard = (KBDLLHOOKSTRUCT*)lParam;
         keyPressed = keyboard->vkCode;
 
@@ -29,6 +35,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     }
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
+
 int main() {
     // Create file for communicating with port microcontroller is connected to
     microcontrollerPort = CreateFile(PORT, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);

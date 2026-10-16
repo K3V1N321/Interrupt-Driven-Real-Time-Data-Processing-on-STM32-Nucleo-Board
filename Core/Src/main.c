@@ -46,9 +46,9 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+int minutePassedFlag = 0;
 uint32_t delay = BASE_DELAY;
-volatile uint16_t numCharsTyped = 0;
-char charBuffer[20];
+uint16_t numCharsTyped = 0;
 uint8_t byteReceived;
 
 /* USER CODE END PV */
@@ -76,6 +76,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+	uint16_t numCharsTypedCopy;
 
   /* USER CODE END 1 */
 
@@ -108,17 +109,12 @@ int main(void)
   // Enable  timer interrupt mode
   HAL_TIM_Base_Start_IT(&htim2);
 
-  ssd1306_Init();
-  ssd1306_SetCursor(0, 0);
-  ssd1306_WriteString("Typing Speed", Font_7x10, White);
-  ssd1306_UpdateScreen();
-//  HAL_Delay(3000);
-//  ssd1306_Fill(Black);
+  Display_Init();
+
+//  ssd1306_Init();
+//  ssd1306_SetCursor(0, 0);
+//  ssd1306_WriteString("Typing Speed", Font_7x10, White);
 //  ssd1306_UpdateScreen();
-
-
-
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -126,10 +122,19 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-	HAL_Delay(delay);
-
     /* USER CODE BEGIN 3 */
+	if (minutePassedFlag) {
+		// Erase the previous number
+		Display_ClearSpeed();
+		// Get new number of chars typed
+		__disable_irq();
+		numCharsTypedCopy = numCharsTyped;
+		numCharsTyped = 0;
+		__enable_irq();
+
+		// Write the new number
+		Display_WriteSpeed(numCharsTypedCopy);
+	}
   }
   /* USER CODE END 3 */
 }
@@ -331,19 +336,11 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-// Callback function for when user button is pressed
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-	if (GPIO_Pin == GPIO_PIN_13) {
-		if (delay == 1000) {
-			delay = 250;
-		}
-		else {
-			delay += 250;
-		}
-	}
-}
-
-// Callback function for when letter key is pressed
+/*
+ * @brief Callback function for when letter key is pressed
+ * @param huart pointer to UART
+ * @retval None
+ */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart->Instance == USART2) {
 		if (byteReceived >= 65 && byteReceived <= 90) {
@@ -355,32 +352,16 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	HAL_UART_Receive_IT(huart, &byteReceived, 1);
 }
 
-// Callback function for when timer period elapses
+
+/*
+ * @brief Callback function to set flag when timer period elapses
+ * @param htim pointer to timer
+ * @retval None
+ */
+// Callback function to set flag when timer period elapses
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM2) {
-		// Erase the previous number
-		for (int y = 25; y < 25 + 12; y++) {
-		    for (int x = 25; x < 128; x++) {
-		        ssd1306_DrawPixel(x, y, Black);
-		    }
-		}
-		ssd1306_UpdateScreen();
-
-		ssd1306_UpdateScreen();
-
-		// Get new number of chars typed
-		__disable_irq();
-		uint16_t numCharsTypedCopy = numCharsTyped;
-		numCharsTyped = 0;
-		__enable_irq();
-
-		// Write the new number
-		ssd1306_SetCursor(25, 25);
-		snprintf(charBuffer, sizeof(charBuffer), "%d char/min", numCharsTypedCopy);
-		ssd1306_WriteString(charBuffer, Font_7x10, White);
-		ssd1306_UpdateScreen();
-
-
+		minutePassedFlag = 1;
 	}
 }
 
