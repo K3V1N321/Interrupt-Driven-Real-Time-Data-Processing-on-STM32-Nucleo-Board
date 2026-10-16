@@ -48,7 +48,9 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 int minutePassedFlag = 0;
 uint32_t delay = BASE_DELAY;
-uint16_t numCharsTyped = 0;
+uint16_t numCharsBuffer[3];
+uint16_t curNumCharsTyped = 0;
+uint16_t periodsPassed = 0;
 uint8_t byteReceived;
 
 /* USER CODE END PV */
@@ -76,7 +78,9 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-	uint16_t numCharsTypedCopy;
+  uint16_t curNumCharsTypedCopy = 0;
+  uint16_t numCharsSum = 0;
+  uint8_t bufferIndex = 0;
 
   /* USER CODE END 1 */
 
@@ -111,10 +115,6 @@ int main(void)
 
   Display_Init();
 
-//  ssd1306_Init();
-//  ssd1306_SetCursor(0, 0);
-//  ssd1306_WriteString("Typing Speed", Font_7x10, White);
-//  ssd1306_UpdateScreen();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -128,12 +128,33 @@ int main(void)
 		Display_ClearSpeed();
 		// Get new number of chars typed
 		__disable_irq();
-		numCharsTypedCopy = numCharsTyped;
-		numCharsTyped = 0;
+		curNumCharsTypedCopy = curNumCharsTyped;
+		curNumCharsTyped = 0;
 		__enable_irq();
 
-		// Write the new number
-		Display_WriteSpeed(numCharsTypedCopy);
+		numCharsBuffer[bufferIndex] = curNumCharsTypedCopy;
+		if (periodsPassed < 3) {
+			periodsPassed++;
+		}
+
+		// Get sum of number of chars typed for last (up to 3) periods
+		for (int i = 0; i < periodsPassed; i++) {
+			numCharsSum += numCharsBuffer[i];
+		}
+
+		// Display the average number of chars typed
+		Display_WriteSpeed((int)(numCharsSum / periodsPassed));
+
+		// bufferIndex goes around 0 to 2
+		if (bufferIndex == 2) {
+			bufferIndex = 0;
+		}
+		else {
+			bufferIndex++;
+		}
+
+		numCharsSum = 0;
+		minutePassedFlag = 0;
 	}
   }
   /* USER CODE END 3 */
@@ -345,7 +366,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart->Instance == USART2) {
 		if (byteReceived >= 65 && byteReceived <= 90) {
 			__disable_irq();
-			numCharsTyped++;
+			curNumCharsTyped++;
 			__enable_irq();
 		}
 	}
