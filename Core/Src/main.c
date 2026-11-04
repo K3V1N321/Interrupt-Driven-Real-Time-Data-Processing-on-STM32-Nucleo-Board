@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -31,6 +32,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define BASE_DELAY 1000
+#define PERIOD_TIME_SEC 5
+#define WINDOW_SEC 180
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -46,12 +49,12 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-int minutePassedFlag = 0;
 uint32_t delay = BASE_DELAY;
-uint16_t numCharsBuffer[3];
-uint16_t curNumCharsTyped = 0;
-uint16_t periodsPassed = 0;
+volatile uint8_t resetFlag = 0;
+volatile uint8_t timerFlag = 0;
+volatile uint16_t curNumCharsTyped = 0;
 uint8_t byteReceived;
+
 
 /* USER CODE END PV */
 
@@ -78,9 +81,21 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  uint8_t maxPeriods = WINDOW_SEC / PERIOD_TIME_SEC;
+  uint8_t lastBufferIndex = maxPeriods - 1;
   uint16_t curNumCharsTypedCopy = 0;
-  uint16_t numCharsSum = 0;
-  uint8_t bufferIndex = 0;
+  uint16_t curSpeed = 0;
+  uint16_t prevAverage = 0;
+  uint16_t curAverage = 0;
+  uint16_t speedBuffer[WINDOW_SEC / PERIOD_TIME_SEC] = {0};
+
+  uint16_t runningTotal = 0;
+  uint8_t periods = 1;
+  uint8_t start = 0;
+  uint8_t end = 0;
+  uint8_t periodPassed = 0;
+
+
 
   /* USER CODE END 1 */
 
@@ -122,39 +137,88 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
-	if (minutePassedFlag) {
-		// Erase the previous number
+
+	if (resetFlag) {
+		__disable_irq();
+		runningTotal = 0;
+		periods = 0;
+		start = 0;
+		end = 0;
+
+		curNumCharsTyped = 0;
+		timerFlag = 0;
+		resetFlag = 0;
+		__enable_irq();
 		Display_ClearSpeed();
+		Display_WriteSpeed(0);
+		continue;
+	}
+
+
+	// Identify when 5 sec period passed and need to do work
+	__disable_irq();
+	periodPassed = timerFlag;
+	timerFlag = 0;
+	__enable_irq();
+
+
+	if (periodPassed) {
 		// Get new number of chars typed
 		__disable_irq();
 		curNumCharsTypedCopy = curNumCharsTyped;
 		curNumCharsTyped = 0;
 		__enable_irq();
 
-		numCharsBuffer[bufferIndex] = curNumCharsTypedCopy;
-		if (periodsPassed < 3) {
-			periodsPassed++;
-		}
 
-		// Get sum of number of chars typed for last (up to 3) periods
-		for (int i = 0; i < periodsPassed; i++) {
-			numCharsSum += numCharsBuffer[i];
-		}
+		// Convert to numbers of speed (chars per minute)
+		curSpeed = curNumCharsTypedCopy * 12;
 
-		// Display the average number of chars typed
-		Display_WriteSpeed((int)(numCharsSum / periodsPassed));
-
-		// bufferIndex goes around 0 to 2
-		if (bufferIndex == 2) {
-			bufferIndex = 0;
+		// If at least 36 periods (3 minutes has passed)
+		if (periods == maxPeriods) {
+			// Decrease running total by oldest period
+			runningTotal -= speedBuffer[start];
+			// Update index of oldest period
+			if (start == lastBufferIndex) {
+				start = 0;
+			}
+			else {
+				start++;
+			}
 		}
 		else {
-			bufferIndex++;
+			periods++;
 		}
 
-		numCharsSum = 0;
-		minutePassedFlag = 0;
+		// Increase runningTotal by this period's speed
+		runningTotal += curSpeed;
+
+
+		curAverage = (int)(runningTotal / periods);
+
+		if (curAverage != prevAverage) {
+			Display_ClearSpeed();
+			// Display the average number of chars typed
+			Display_WriteSpeed(curAverage);
+			prevAverage = curAverage;
+		}
+
+
+
+		// Store this period's speed to buffer
+		speedBuffer[end] = curSpeed;
+
+
+		// Update next index for buffer
+		if (end == lastBufferIndex) {
+			end = 0;
+		}
+		else {
+			end++;
+		}
+
+		periodPassed  = 0;
 	}
   }
   /* USER CODE END 3 */
@@ -256,7 +320,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 1599;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 599999;
+  htim2.Init.Period = 4999;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -357,6 +421,12 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+	if (GPIO_Pin == GPIO_PIN_13) {
+		resetFlag = 1;
+	}
+}
+
 /*
  * @brief Callback function for when letter key is pressed
  * @param huart pointer to UART
@@ -365,9 +435,7 @@ static void MX_GPIO_Init(void)
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart->Instance == USART2) {
 		if (byteReceived >= 65 && byteReceived <= 90) {
-			__disable_irq();
 			curNumCharsTyped++;
-			__enable_irq();
 		}
 	}
 	HAL_UART_Receive_IT(huart, &byteReceived, 1);
@@ -382,7 +450,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 // Callback function to set flag when timer period elapses
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM2) {
-		minutePassedFlag = 1;
+		timerFlag = 1;
 	}
 }
 
