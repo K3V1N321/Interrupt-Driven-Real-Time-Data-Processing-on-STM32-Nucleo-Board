@@ -90,7 +90,7 @@ int main(void)
   uint16_t speedBuffer[WINDOW_SEC / PERIOD_TIME_SEC] = {0};
 
   uint16_t runningTotal = 0;
-  uint8_t periods = 1;
+  uint8_t periods = 0;
   uint8_t start = 0;
   uint8_t end = 0;
   uint8_t periodPassed = 0;
